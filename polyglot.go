@@ -4,8 +4,43 @@ import (
     "os"
     "fmt"
     "net"
+    "log"
+    "time"
 )
 
+// type Client interface{}
+type PolyglotServer struct {
+    log *log.Logger
+//     clients map[string]*Client
+}
+
+func (s *PolyglotServer) Listen(addr *net.UnixAddr) {
+    list, err := net.ListenUnix("unix", addr)
+    if err != nil {
+        s.log.Println("FUCK LISTEN FAILED")
+        panic(err)
+    }
+    defer list.Close()
+
+    go func() {
+        _, err = list.AcceptUnix()
+        if err != nil {
+            panic("Couldn't accept conn :"+err.Error())
+        }
+
+        s.log.Println("New client!")
+
+        // go func() {
+        //     buf := make([]byte, 2048)
+        //     for {
+        //         buf, err := conn.ReadFromUnix()
+        //     }
+
+        // }
+    }()
+
+    // list.SetUnlinkOnClose(true)
+}
 
 
 func polyglot() {
@@ -13,31 +48,18 @@ func polyglot() {
     addr := &net.UnixAddr{polyglotSocket, "unix"}
 
 
-    needToStartManager := false
     if _, err := os.Stat(polyglotSocket); os.IsNotExist(err) {
-        panic("Socket doesn't exist yet")
-        list, err := net.ListenUnix("unix", addr)
-
-        go func() {
-            conn, err := list.AcceptUnix()
-            if err != nil {
-                panic("Couldn't accept conn :"+err.Error())
-            }
-
-            go func() {
-                buf := make([]byte, 2048)
-                for {
-                    buf, err := conn.ReadFromUnix()
-                }
-            }
-        }
-
-        list.SetUnlinkOnClose(true)
+        fmt.Println("Socket doesn't exist yet")
+        logger := log.New(os.Stdout, "server: ", log.Lshortfile)
+        server := &PolyglotServer{logger}
+        go server.Listen(addr)
+        time.Sleep(100 * time.Millisecond)
     }
 
-    conn, err := net.DialUnix("unix", nil, addr)
+    _, err := net.DialUnix("unix", nil, addr)
     if err != nil {
-        panic("Error connecting to Polyglot controller")
+
+        panic("Error connecting to Polyglot controller :"+err.Error())
     }
 }
 

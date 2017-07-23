@@ -1,0 +1,2 @@
+ - keep within the programming language syntax
+ - keep in the same semantic style as the language
