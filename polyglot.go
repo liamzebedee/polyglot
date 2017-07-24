@@ -2,73 +2,54 @@ package main
 
 import (
     "os"
+    "os/signal"
     "fmt"
-    "net"
     "log"
     "time"
+    "syscall"
+
+    "polyglotenv"
 )
 
-// type Client interface{}
-type PolyglotServer struct {
-    log *log.Logger
-//     clients map[string]*Client
+type GracefullyEnds interface {
+    GracefullyShutdown()
 }
-
-func (s *PolyglotServer) Listen(addr *net.UnixAddr) {
-    list, err := net.ListenUnix("unix", addr)
-    if err != nil {
-        s.log.Println("FUCK LISTEN FAILED")
-        panic(err)
-    }
-    defer list.Close()
-
-    go func() {
-        _, err = list.AcceptUnix()
-        if err != nil {
-            panic("Couldn't accept conn :"+err.Error())
-        }
-
-        s.log.Println("New client!")
-
-        // go func() {
-        //     buf := make([]byte, 2048)
-        //     for {
-        //         buf, err := conn.ReadFromUnix()
-        //     }
-
-        // }
-    }()
-
-    // list.SetUnlinkOnClose(true)
-}
-
 
 func polyglot() {
-    polyglotSocket := "/tmp/polyglot.sock"
-    addr := &net.UnixAddr{polyglotSocket, "unix"}
+    var controller *polyglotenv.Controller
 
+    ch := make(chan os.Signal)
+    signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
+
+    polyglotSocket := "/tmp/polyglot.sock"
 
     if _, err := os.Stat(polyglotSocket); os.IsNotExist(err) {
         fmt.Println("Socket doesn't exist yet")
         logger := log.New(os.Stdout, "server: ", log.Lshortfile)
-        server := &PolyglotServer{logger}
-        go server.Listen(addr)
-        time.Sleep(100 * time.Millisecond)
+        
+        controller = polyglotenv.NewController(logger)
+        go controller.Listen(polyglotSocket)
     }
 
-    _, err := net.DialUnix("unix", nil, addr)
-    if err != nil {
+    time.Sleep(100 * time.Millisecond)
 
-        panic("Error connecting to Polyglot controller :"+err.Error())
-    }
+    logger := log.New(os.Stdout, "client 1: ", log.Lshortfile)
+    client1 := &polyglotenv.PolyglotClient{logger}
+    client1.Connect(polyglotSocket)
+
+    <-ch
+    fmt.Println("Shutting down gracefully...")
+    controller.GracefullyShutdown()
+    time.Sleep(1 * time.Second)
+    os.Exit(0)
 }
+
 
 
 
 func main() {
     fmt.Println("polyglot by @liamzebedee")
     fmt.Println("Support developer experience - liamz.co")
-
 
     if len(os.Args) < 2 {
         return
